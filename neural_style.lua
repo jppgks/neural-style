@@ -50,26 +50,33 @@ cmd:option('-style_layers', 'relu1_1,relu2_1,relu3_1,relu4_1,relu5_1', 'layers f
 
 
 local function main(params)
+  -- JG: multigpu looks interesting, does it offload automatically?
   local dtype, multigpu = setup_gpu(params)
 
   local loadcaffe_backend = params.backend
   if params.backend == 'clnn' then loadcaffe_backend = 'nn' end
+  -- JG: load neural net from protobuf file
   local cnn = loadcaffe.load(params.proto_file, params.model_file, loadcaffe_backend):type(dtype)
 
+  -- JG: load and scale the content image, provided through the command line
   local content_image = image.load(params.content_image, 3)
   content_image = image.scale(content_image, params.image_size, 'bilinear')
+  -- JG: preprocess?
   local content_image_caffe = preprocess(content_image):float()
 
   local style_size = math.ceil(params.style_scale * params.image_size)
-  local style_image_list = params.style_image:split(',')
-  local style_images_caffe = {}
+  local style_image_list = params.style_image:split(',') -- JG: list of file paths
+  local style_images_caffe = {} -- JG: list of loaded, scaled and preprocessed style images
   for _, img_path in ipairs(style_image_list) do
+    -- JG: load and scale current style image
     local img = image.load(img_path, 3)
     img = image.scale(img, style_size, 'bilinear')
     local img_caffe = preprocess(img):float()
+    -- JG: insert the image into the array
     table.insert(style_images_caffe, img_caffe)
   end
 
+  -- JG: init image?
   local init_image = nil
   if params.init_image ~= '' then
     init_image = image.load(params.init_image, 3)
@@ -119,6 +126,7 @@ local function main(params)
       local layer_type = torch.type(layer)
       local is_pooling = (layer_type == 'cudnn.SpatialMaxPooling' or layer_type == 'nn.SpatialMaxPooling')
       if is_pooling and params.pooling == 'avg' then
+        -- JG: replace max pooling with average pooling, as suggested in the paper
         assert(layer.padW == 0 and layer.padH == 0)
         local kW, kH = layer.kW, layer.kH
         local dW, dH = layer.dW, layer.dH
@@ -200,6 +208,7 @@ local function main(params)
   end
   local img = nil
   if params.init == 'random' then
+    -- JG: white noise image
     img = torch.randn(content_image:size()):float():mul(0.001)
   elseif params.init == 'image' then
     if init_image then
@@ -238,6 +247,7 @@ local function main(params)
     error(string.format('Unrecognized optimizer "%s"', params.optimizer))
   end
 
+  -- JG: prints training logs if in verbose mode
   local function maybe_print(t, loss)
     local verbose = (params.print_iter > 0 and t % params.print_iter == 0)
     if verbose then
