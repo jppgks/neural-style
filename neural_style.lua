@@ -61,7 +61,7 @@ local function main(params)
   -- JG: load and scale the content image, provided through the command line
   local content_image = image.load(params.content_image, 3)
   content_image = image.scale(content_image, params.image_size, 'bilinear')
-  -- JG: preprocess?
+  -- JG: scaling, normalising, ...
   local content_image_caffe = preprocess(content_image):float()
 
   local style_size = math.ceil(params.style_scale * params.image_size)
@@ -76,7 +76,7 @@ local function main(params)
     table.insert(style_images_caffe, img_caffe)
   end
 
-  -- JG: init image?
+  -- JG: use init image instead of white noise, if provided
   local init_image = nil
   if params.init_image ~= '' then
     init_image = image.load(params.init_image, 3)
@@ -161,6 +161,7 @@ local function main(params)
   net:type(dtype)
 
   -- Capture content targets
+  -- JG: feedforward pass through network with content image as input, generating activations for the content image
   for i = 1, #content_losses do
     content_losses[i].mode = 'capture'
   end
@@ -170,6 +171,7 @@ local function main(params)
   net:forward(content_image_caffe:type(dtype))
 
   -- Capture style targets
+  -- JG: feedforward pass through network with style image as input, generating activations for the style image
   for i = 1, #content_losses do
     content_losses[i].mode = 'none'
   end
@@ -202,6 +204,7 @@ local function main(params)
   end
   collectgarbage()
 
+  -- JG: now that we have content and style weights, we can generate the mixed image
   -- Initialize the image
   if params.seed >= 0 then
     torch.manualSeed(params.seed)
@@ -227,6 +230,7 @@ local function main(params)
   local y = net:forward(img)
   local dy = img.new(#y):zero()
 
+  -- JG: helper part for printing optimizer state
   -- Declaring this here lets us access it in maybe_print
   local optim_state = nil
   if params.optimizer == 'lbfgs' then
