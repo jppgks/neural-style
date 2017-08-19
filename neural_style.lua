@@ -230,7 +230,7 @@ local function main(params)
   local y = net:forward(img)
   local dy = img.new(#y):zero()
 
-  -- JG: helper part for printing optimizer state
+  -- JG: set optimizer parameters used below when calling optim.<method>
   -- Declaring this here lets us access it in maybe_print
   local optim_state = nil
   if params.optimizer == 'lbfgs' then
@@ -295,6 +295,7 @@ local function main(params)
   local function feval(x)
     num_calls = num_calls + 1
     net:forward(x)
+    -- JG: compute the gradient of the input (x) given the gradients with respect to the output of the module (dy, declared on line ~231)
     local grad = net:updateGradInput(x, dy)
     local loss = 0
     for _, mod in ipairs(content_losses) do
@@ -314,6 +315,7 @@ local function main(params)
   -- Run optimization.
   if params.optimizer == 'lbfgs' then
     print('Running optimization with L-BFGS')
+    -- JG: optim.<method> (lbfgs) returns the new, optimized vector (x) given a function to be optimized (feval) and the initial point (img)
     local x, losses = optim.lbfgs(feval, img, optim_state)
   elseif params.optimizer == 'adam' then
     print('Running optimization with ADAM')
